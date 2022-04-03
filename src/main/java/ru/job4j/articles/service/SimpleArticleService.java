@@ -7,6 +7,8 @@ import ru.job4j.articles.model.Word;
 import ru.job4j.articles.service.generator.ArticleGenerator;
 import ru.job4j.articles.store.Store;
 
+import java.lang.ref.WeakReference;
+import java.util.WeakHashMap;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -15,11 +17,27 @@ public class SimpleArticleService implements ArticleService {
     private static final Logger LOGGER = LoggerFactory.getLogger(SimpleArticleService.class.getSimpleName());
 
     private final ArticleGenerator articleGenerator;
+    private static WeakHashMap<Article, WeakReference<Article>> weakMap = new WeakHashMap<>();
 
     public SimpleArticleService(ArticleGenerator articleGenerator) {
         this.articleGenerator = articleGenerator;
     }
 
+    /* this solution reflects the essence of this lesson */
+    @Override
+    public void generate(Store<Word> wordStore, int count, Store<Article> articleStore) {
+        LOGGER.info("Геренация статей в количестве {}", count);
+        var words = wordStore.findAll();
+        IntStream.iterate(0, i -> i < count, i -> i + 1)
+                .peek(i -> LOGGER.info("Сгенерирована статья № {}", i))
+                .forEach(data -> {
+                    Article key = articleGenerator.generate(words);
+                    articleStore.save(key);
+                    WeakReference<Article> value = new WeakReference<>(key);
+                    weakMap.put(key, value);
+                });
+    }
+/* original
     @Override
     public void generate(Store<Word> wordStore, int count, Store<Article> articleStore) {
         LOGGER.info("Геренация статей в количестве {}", count);
@@ -30,4 +48,18 @@ public class SimpleArticleService implements ArticleService {
                 .collect(Collectors.toList());
         articles.forEach(articleStore::save);
     }
+
+ */
+/* как по мне то тут проще нету терминальной операции Collectors.toList()
+    @Override
+    public void generate(Store<Word> wordStore, int count, Store<Article> articleStore) {
+        LOGGER.info("Геренация статей в количестве {}", count);
+        var words = wordStore.findAll();
+        IntStream.iterate(0, i -> i < count, i -> i + 1)
+                .peek(i -> LOGGER.info("Сгенерирована статья № {}", i))
+                .mapToObj((x) -> articleGenerator.generate(words))
+                .forEach(articleStore::save);
+    }
+
+ */
 }
